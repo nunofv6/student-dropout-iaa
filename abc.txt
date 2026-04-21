@@ -1,0 +1,64 @@
+models = {
+    "Logistic Regression": LogisticRegression(max_iter=2000),
+    "Decision Tree": DecisionTreeClassifier(random_state=42),
+    "Random Forest": RandomForestClassifier(random_state=42),
+    "kNN": KNeighborsClassifier(),
+    "SVM": SVC()
+}
+
+results = []
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+
+for name, model in models.items():
+    pipeline = Pipeline(steps=[
+        ("preprocessor", preprocessor),
+        ("classifier", model)
+    ])
+    
+    pipeline.fit(x_train, y_train)
+    y_pred = pipeline.predict(x_test)
+
+    scores = cross_val_score(
+        pipeline,
+        x,
+        y_encoded,
+        cv=cv,
+        scoring="f1_macro"
+    )
+
+    report = classification_report(
+        y_test,
+        y_pred,
+        target_names=label_encoder.classes_,
+        output_dict=True
+    )
+
+    results.append({
+        "Model": name,
+
+        "Accuracy": accuracy_score(y_test, y_pred),
+
+        "Macro Precision": report["macro avg"]["precision"],
+        "Macro Recall": report["macro avg"]["recall"],
+        "Macro F1": report["macro avg"]["f1-score"],
+
+        "Dropout Precision": report["Dropout"]["precision"],
+        "Dropout Recall": report["Dropout"]["recall"],
+        "Dropout F1": report["Dropout"]["f1-score"],
+
+        "Enrolled Precision": report["Enrolled"]["precision"],
+        "Enrolled Recall": report["Enrolled"]["recall"],
+        "Enrolled F1": report["Enrolled"]["f1-score"],
+
+        "Graduate Precision": report["Graduate"]["precision"],
+        "Graduate Recall": report["Graduate"]["recall"],
+        "Graduate F1": report["Graduate"]["f1-score"],
+
+        "F1 Macro scores": scores,
+        "Mean": scores.mean(),
+        "Std": scores.std()
+    })
+
+results_df = pd.DataFrame(results)
+print(results_df.sort_values(by="Macro F1", ascending=False))
