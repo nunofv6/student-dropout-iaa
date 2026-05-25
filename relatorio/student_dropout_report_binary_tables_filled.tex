@@ -1,0 +1,196 @@
+\documentclass[lettersize,journal]{IEEEtran}
+\usepackage{amsmath,amsfonts}
+\usepackage{array}
+\usepackage[caption=false,font=footnotesize,labelfont=sf,textfont=sf]{subfig}
+\usepackage{textcomp}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{url}
+\usepackage{cite}
+\usepackage{float}
+
+\begin{document}
+
+\title{Predicting Student Dropouts and Academic Successes}
+
+\author{Alírio Rego, Nuno Vieira%
+\thanks{Group project developed for the Introduction to Machine Learning course.}}
+
+\markboth{Introduction to Machine Learning -- Final Project}{}
+
+\maketitle
+
+\begin{abstract}
+Student dropout is an important challenge for higher education institutions. This project studies the use of supervised machine learning to predict whether a student is likely to drop out using demographic, socio-economic, admission, and academic performance variables. The original dataset contains three academic status labels: Dropout, Enrolled, and Graduate. However, the preliminary multiclass experiments showed that the Enrolled class was the main source of confusion, since it represents an intermediate academic state rather than a final outcome. For this reason, the final version of the project reformulates the task as a binary classification problem: Dropout versus Non-dropout. Rows labelled as Enrolled were removed, and Graduate students were mapped to the Non-dropout class. A preprocessing pipeline was built to handle numerical and categorical variables, and four classifiers were compared: Logistic Regression, Decision Tree, Random Forest, and Support Vector Machine. The models were tuned using stratified cross-validation and evaluated on a held-out test set using accuracy, macro-averaged precision, recall, F1-score, class-level metrics, and confusion matrices. The project also discusses model limitations, overfitting and underfitting risks, and the responsible use of predictive systems in education.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Student dropout, academic success, educational data mining, machine learning, binary classification, Random Forest.
+\end{IEEEkeywords}
+
+\section{Introduction}
+\IEEEPARstart{S}{tudent} dropout is a relevant problem in higher education because it affects students, institutions, and society. Early identification of students who may be at risk can support timely interventions, such as academic tutoring, financial support, or personalized monitoring. Machine learning is suitable for this type of problem because educational institutions often store structured information about students that can be used to detect patterns related to academic progression.
+
+The objective of this project is to predict student dropout risk using a public tabular dataset. The original target variable has three classes: \emph{Dropout}, \emph{Enrolled}, and \emph{Graduate}. During the preliminary phase, the problem was treated as a supervised multiclass classification task. However, the results showed that the Enrolled class was consistently the most difficult to predict. This class is also conceptually ambiguous, because it represents an intermediate academic state rather than a final academic outcome.
+
+For the final version of the project, the problem was reformulated as a binary classification task: \emph{Dropout} versus \emph{Non-dropout}. Students labelled as Enrolled were removed from the dataset, while students labelled as Graduate were treated as Non-dropout. This change makes the target variable more coherent because it compares students who dropped out with students who reached a successful final outcome. The final goal is not only to obtain good predictive performance, but also to critically analyze the behavior of different models, the limitations of the available data, and the ethical implications of using these predictions in an educational context.
+
+The main contributions of the project are: (i) the construction of a complete preprocessing and modeling pipeline; (ii) the reformulation of the original three-class problem into a clearer binary dropout detection task; (iii) the comparison of four classification algorithms; (iv) the use of macro-averaged evaluation metrics to account for class imbalance; and (v) a critical discussion of errors, limitations, and responsible use.
+
+\section{Related Work}
+Educational data mining and learning analytics have been widely studied as tools for predicting student performance, dropout risk, and academic success. Rastrollo-Guerrero \emph{et al.} reviewed machine learning techniques for student performance prediction and showed that supervised learning methods are frequently used in this area \cite{rastrollo2020review}. Early warning systems are a common application of these techniques, since they aim to detect at-risk students before failure or dropout becomes irreversible.
+
+Chung and Lee used Random Forest models for dropout early warning in high-school education and argued that predictive modeling can help identify students at risk in advance \cite{chung2019dropout}. In higher education, Realinho \emph{et al.} introduced the dataset used in this project, which was designed to support the prediction of dropout and academic success using information known at enrollment and at the end of the first two semesters \cite{realinho2022dataset}. The UCI Machine Learning Repository describes the original task as a three-category classification problem with student-level instances and 36 predictive features \cite{uci2021dropout}.
+
+More recent comparative studies have explored several supervised learning algorithms on similar dropout prediction tasks. Villar and de Andrade compared Decision Tree, SVM, Random Forest, and boosting algorithms, highlighting the importance of dealing with class imbalance and reporting F1-score for the different classes \cite{villar2024supervised}. Other work has also studied early warning systems in online learning contexts, emphasizing the need for interpretable and actionable predictions rather than purely automatic decisions \cite{baneres2023early}. These studies support the methodological choices adopted in this project: testing different model families, using class-sensitive metrics, and interpreting predictions cautiously.
+
+\section{Dataset and Exploratory Analysis}
+The dataset used in this work is the \emph{Predict Students' Dropout and Academic Success} dataset from the UCI Machine Learning Repository. The original dataset contains 4424 student records and 36 input features. Each instance represents one student, and the variables include demographic, socio-economic, admission, and academic information. The original target variable contains three classes: Dropout, Enrolled, and Graduate.
+
+Initial inspection of the dataset showed 4424 rows and 37 columns, including the target variable. No duplicated rows or missing values were found. The dataset contains both numerical variables, such as admission grade and curricular unit grades, and categorical variables stored as integer codes, such as course, marital status, application mode, gender, debtor status, and scholarship holder status.
+
+\begin{figure}[!t]
+\centering
+\IfFileExists{fig_target_distribution.png}{\includegraphics[width=0.95\columnwidth]{fig_target_distribution.png}}{\fbox{\parbox{0.9\columnwidth}{\centering TODO: Insert target class distribution figure.}}}
+\caption{Original target class distribution for Dropout, Enrolled, and Graduate.}
+\label{fig:target_distribution}
+\end{figure}
+
+The original target distribution is imbalanced, with Graduate being the most frequent class and Enrolled the least frequent. In the preliminary multiclass approach, Enrolled was also the class with the weakest performance. Since this class does not represent a final academic outcome, it was removed from the final dataset. The final binary dataset therefore contains only Dropout and Graduate students, with Graduate mapped to Non-dropout.
+
+After removing Enrolled rows, the final dataset contains 3630 student records. The binary target is still imbalanced, since the number of Non-dropout students is higher than the number of Dropout students. This is important because a model can obtain a relatively high accuracy while still performing poorly on the minority class. For this reason, the evaluation strategy uses macro-averaged metrics in addition to accuracy.
+
+\begin{figure}[!t]
+\centering
+\IfFileExists{fig_feature_analysis.png}{\includegraphics[width=0.95\columnwidth]{fig_feature_analysis.png}}{\fbox{\parbox{0.9\columnwidth}{\centering TODO: Insert compact EDA figure, for example selected histograms or boxplots.}}}
+\caption{Example exploratory analysis of relevant student features.}
+\label{fig:feature_analysis}
+\end{figure}
+
+\section{Data Processing Pipeline}
+The dataset contains variables with different meanings and scales. A distinction was made between numerical variables and categorical variables. Some categorical variables are represented by integer codes, but the numeric values do not necessarily represent meaningful distances or ordinal relationships. Treating these variables as continuous values could introduce false assumptions. Therefore, categorical variables were transformed using One-Hot Encoding.
+
+Numerical variables were standardized with StandardScaler. This is especially relevant for Logistic Regression and Support Vector Machine, which are sensitive to the scale of the input variables. Tree-based models are less dependent on scaling, but a unified preprocessing structure was maintained for consistency. The transformations were implemented using a ColumnTransformer and integrated into Scikit-learn Pipelines, ensuring that preprocessing was learned only from the training data during model fitting.
+
+The target variable was reformulated before training. Rows whose original target value was Enrolled were removed, since this class represents an intermediate and non-final state. The remaining classes were converted into a binary target: Dropout remained Dropout, while Graduate was mapped to Non-dropout. The target labels were then encoded using Label Encoding. The data was split into training and test sets using an 80/20 stratified split with a fixed random seed. Stratification preserved the class proportions in both sets.
+
+\section{Evaluation Strategy}
+\subsection{Models and Parameter Tuning}
+Four classification algorithms were tested.
+
+Logistic Regression was used as an interpretable linear baseline. It is useful for checking whether the dataset contains patterns that can be captured by a relatively simple decision boundary.
+
+Decision Tree was tested because it can capture nonlinear relationships and is easy to interpret. However, single trees can be unstable and prone to overfitting if they are too deep, or underfitting if they are too constrained.
+
+Random Forest was included as an ensemble method that reduces the variance of individual decision trees by averaging many trees. This model is suitable for tabular data and can capture nonlinear interactions between variables.
+
+Support Vector Machine was also tested because it is a strong classifier for structured data and can perform well when class separation is not purely linear. Both linear and RBF kernels were considered during tuning.
+
+Hyperparameter tuning was performed with stratified 5-fold cross-validation on the training set. GridSearchCV was used for Logistic Regression, Decision Tree, and SVM, while RandomizedSearchCV was used for Random Forest due to the larger hyperparameter space. The main optimization metric was macro F1-score.
+
+Macro F1-score was selected because the classes are not equally represented and because the goal is to avoid evaluating the model only by its performance on the majority class. In this problem, identifying Dropout students is especially important, so accuracy alone is not sufficient. Accuracy, macro precision, macro recall, macro F1-score, class-specific precision/recall/F1-score, and confusion matrices were used for final evaluation on the held-out test set.
+
+\begin{figure}[!t]
+\centering
+\IfFileExists{fig_hyperparameter_search.png}{\includegraphics[width=0.95\columnwidth]{fig_hyperparameter_search.png}}{\fbox{\parbox{0.9\columnwidth}{\centering TODO: Insert hyperparameter search visualization.}}}
+\caption{Example hyperparameter search results using cross-validated macro F1-score.}
+\label{fig:hyperparameter_search}
+\end{figure}
+
+\subsection{Results}
+Table~\ref{tab:model_comparison} presents the final test results for the tuned models. Since the final task is binary, the results compare the ability of each model to distinguish Dropout students from Graduate students. The results show that SVM and Logistic Regression achieved the strongest overall performance, with SVM obtaining the highest macro F1-score.
+
+\begin{table}[!t]
+\caption{Final Model Comparison on the Binary Test Set}
+\label{tab:model_comparison}
+\centering
+\footnotesize
+\begin{tabular}{lcccc}
+\toprule
+Model & Acc. & Macro P & Macro R & Macro F1 \\
+\midrule
+SVM & 0.9146 & 0.9159 & 0.9041 & 0.9091 \\
+Logistic Regression & 0.9146 & 0.9189 & 0.9015 & 0.9086 \\
+Random Forest & 0.9118 & 0.9215 & 0.8949 & 0.9048 \\
+Decision Tree & 0.8747 & 0.8696 & 0.8662 & 0.8678 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[!t]
+\caption{Class-Level F1-Scores on the Binary Test Set}
+\label{tab:class_f1}
+\centering
+\footnotesize
+\begin{tabular}{lcc}
+\toprule
+Model & Dropout & Graduate \\
+\midrule
+SVM & 0.8869 & 0.9314 \\
+Logistic Regression & 0.8852 & 0.9320 \\
+Random Forest & 0.8788 & 0.9307 \\
+Decision Tree & 0.8378 & 0.8979 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Compared with the preliminary multiclass formulation, the binary formulation is expected to reduce confusion because the ambiguous Enrolled class is no longer part of the target. This does not make the problem trivial: the model still needs to distinguish students who dropped out from students who successfully graduated, and the classes remain imbalanced. However, the final target is more meaningful because it compares two clearer academic outcomes.
+
+\begin{figure}[!t]
+\centering
+\IfFileExists{fig_confusion_rf.png}{\includegraphics[width=0.95\columnwidth]{fig_confusion_rf.png}}{\fbox{\parbox{0.9\columnwidth}{\centering TODO: Insert final confusion matrix for the selected model.}}}
+\caption{Confusion matrix for the selected model in the binary classification task.}
+\label{fig:confusion_rf}
+\end{figure}
+
+The confusion matrix is especially important for interpreting the model. In this context, false negatives correspond to students who actually dropped out but were predicted as Non-dropout. These errors are particularly serious because they may prevent timely intervention. False positives correspond to students predicted as Dropout even though they belong to the Non-dropout class. These errors may cause unnecessary intervention or concern, but they are usually less harmful than failing to identify a student genuinely at risk.
+
+Accuracy alone would hide these differences. For this reason, the final interpretation should consider macro F1-score, Dropout recall, and the confusion matrix together. A useful model is not simply the model with the highest global accuracy, but the model that provides a good balance between detecting Dropout students and avoiding excessive false alarms.
+
+\subsection{Overfitting and Underfitting}
+The comparison between models also provides evidence about overfitting and underfitting. Decision Trees can be prone to overfitting when they are too deep, because they may learn very specific rules from the training data. If the tree is too restricted, it may underfit and fail to capture important relationships. Hyperparameter tuning was therefore used to control parameters such as maximum depth and minimum samples per leaf.
+
+Random Forest reduces the overfitting risk of a single tree by combining many trees and averaging their predictions. This usually improves generalization on tabular datasets. Logistic Regression and the best SVM configurations are more regularized and simpler, so they are less likely to overfit severely, but they may underfit nonlinear relationships between student variables. The use of stratified cross-validation during hyperparameter selection reduced the risk of choosing a model that only performed well on a particular train-test split. However, further validation on external institutional data would be necessary before considering real-world deployment.
+
+\section{Responsible and Ethical Considerations}
+Predicting academic outcomes has ethical consequences because model outputs may influence how students are perceived or supported. A model should not be used as an automatic decision-maker. Instead, it should be used as a decision-support tool that helps staff identify students who may benefit from additional support.
+
+Fairness is a central concern. Some variables may be associated with socio-economic status, demographic characteristics, or access to resources. Even when sensitive attributes are not used directly for discrimination, other variables can act as proxies and reproduce existing inequalities. Therefore, any deployment of this type of model should include fairness monitoring and human review.
+
+The cost of errors is also asymmetric. Failing to identify a student at risk may prevent timely intervention. However, incorrectly labeling a student as high risk may create stigma or unnecessary pressure. This is especially relevant in the binary formulation because the model directly separates students into Dropout and Non-dropout predictions. For this reason, predictions should be communicated carefully, used only to offer support, and combined with contextual information from teachers or academic services.
+
+\section{Conclusions and Future Work}
+This project developed and evaluated a machine learning pipeline for predicting student dropout risk. The original dataset contained three academic status labels, but the preliminary multiclass experiments showed that the Enrolled class was difficult to classify and conceptually ambiguous. Therefore, the final version reformulated the task as a binary classification problem by removing Enrolled rows and mapping Graduate students to Non-dropout.
+
+Four classifiers were compared using stratified cross-validation and a held-out test set. The final selected model should be chosen based on the binary test results, with particular attention to macro F1-score, Dropout recall, and the confusion matrix. This is more appropriate than relying only on accuracy, because the practical objective is to identify students at risk while avoiding irresponsible or excessive intervention.
+
+The main limitation of the project is that the evaluation was performed on a single dataset and a single train-test split. Another limitation is that the removal of Enrolled rows produces a cleaner target, but also reduces the amount of data and changes the scope of the problem. Future work could test additional models such as Gradient Boosting, XGBoost, LightGBM, or CatBoost, apply resampling methods such as SMOTE, perform external validation, and use interpretability methods such as feature importance or SHAP to better understand the model's decisions.
+
+From a learning perspective, the project showed that problem formulation is as important as model selection. The preliminary results revealed that a class can be technically valid in the dataset but still problematic for prediction and interpretation. Reformulating the target helped align the model with a clearer practical objective. The project also showed that preprocessing choices, class imbalance, metric selection, and error analysis strongly affect the conclusions.
+
+\section*{AI Tools Acknowledgement}
+AI tools were used to support writing, organization, and critical review of the report. ChatGPT was used to help structure the document, identify missing sections, improve clarity, and review the consistency between the code, results, and written discussion. The final technical decisions, experiments, interpretation of results, and validation of the content were performed by the group. AI-generated suggestions were reviewed and adapted before inclusion.
+
+\begin{thebibliography}{1}
+
+\bibitem{rastrollo2020review}
+J. L. Rastrollo-Guerrero, J. A. G\'{o}mez-Pulido, and A. Dur\'{a}n-Dom\'{i}nguez, ``Analyzing and predicting students' performance by means of machine learning: A review,'' \emph{Applied Sciences}, vol. 10, no. 3, p. 1042, 2020, doi: 10.3390/app10031042.
+
+\bibitem{chung2019dropout}
+J. Y. Chung and S. Lee, ``Dropout early warning systems for high school students using machine learning,'' \emph{Children and Youth Services Review}, vol. 96, pp. 346--353, 2019, doi: 10.1016/j.childyouth.2018.11.030.
+
+\bibitem{realinho2022dataset}
+V. Realinho, J. Machado, L. Baptista, and M. V. Martins, ``Predicting student dropout and academic success,'' \emph{Data}, vol. 7, no. 11, p. 146, 2022, doi: 10.3390/data7110146.
+
+\bibitem{uci2021dropout}
+M. V. Martins, D. Tolledo, J. Machado, L. M. T. Baptista, and V. Realinho, ``Predict Students' Dropout and Academic Success,'' UCI Machine Learning Repository, 2021, doi: 10.24432/C5MC89.
+
+\bibitem{villar2024supervised}
+A. Villar and C. R. V. de Andrade, ``Supervised machine learning algorithms for predicting student dropout and academic success: a comparative study,'' \emph{Discover Artificial Intelligence}, vol. 4, article 2, 2024, doi: 10.1007/s44163-023-00079-z.
+
+\bibitem{baneres2023early}
+D. Ba\~{n}eres, M. E. Rodr\'{i}guez-Gonzalez, and A. E. Guerrero-Rold\'{a}n, ``An early warning system to identify and intervene online dropout learners,'' \emph{International Journal of Educational Technology in Higher Education}, vol. 20, article 3, 2023, doi: 10.1186/s41239-022-00371-5.
+
+\end{thebibliography}
+
+\end{document}
